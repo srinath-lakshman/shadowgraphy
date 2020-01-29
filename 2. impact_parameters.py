@@ -21,19 +21,19 @@ from skimage import color
 ################################################################################
 
 hard_disk   = r'/media/devici/Samsung_T5'
-project     = r'srinath_dhm/impact_over_thin_films/speed1/00100cs0010mum_r4'
+project     = r'srinath_dhm/impact_over_thin_films/speed2/00100cs0010mum_r4'
 
 ################################################################################
 
-f = hard_disk + '/' + project + '/' + r'00100cs0010mum_r4'
-os.chdir(f)
+file = hard_disk + '/' + project + '/' + r'00100cs0010mum_r4'
+os.chdir(file)
 
 px_microns = np.loadtxt("px_microns.txt")
-fps_hz = int(tuple(open("100cst_10mum_r1_.cih",'r'))[15][19:])
+fps_hz = int(tuple(open("100cst_10mum_pos5_r1_.cih",'r'))[15][19:])
 
-k_start, k_end = 15, 96
-y_min, y_max = 256, 527
-x_min, x_max = 310, 475
+k_start, k_end = 19, 186
+y_min, y_max = 129, 719
+x_min, x_max = 250, 500
 radii_min, radii_max = 60, 71
 
 images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))

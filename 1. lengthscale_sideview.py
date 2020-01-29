@@ -11,12 +11,12 @@ from skimage import filters
 ################################################################################
 
 hard_disk   = r'/media/devici/Samsung_T5'
-project     = r'srinath_dhm/impact_over_thin_films/speed1/00100cs0010mum_r4'
+project     = r'srinath_dhm/impact_over_thin_films/speed2/00100cs0010mum_r4'
 
 ################################################################################
 
-f = hard_disk + '/' + project + '/' + r'00100cs0010mum_r4'
-os.chdir(f)
+folder = hard_disk + '/' + project + '/' + r'00100cs0010mum_r4'
+os.chdir(folder)
 
 image_name = r"screw_diameter_mm"
 
