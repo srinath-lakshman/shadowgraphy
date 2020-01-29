@@ -31,17 +31,10 @@ os.chdir(f)
 px_microns = np.loadtxt("px_microns.txt")
 fps_hz = int(tuple(open("100cst_10mum_r1_.cih",'r'))[15][19:])
 
-k_start = 15
-k_end = 96
-
-y_min = 256
-y_max = 527
-
-x_min = 310
-x_max = 475
-
-radii_min = 60
-radii_max = 71
+k_start, k_end = 15, 96
+y_min, y_max = 256, 527
+x_min, x_max = 310, 475
+radii_min, radii_max = 60, 71
 
 images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))
 n = len(glob.glob('*.tif')) - 1
@@ -127,6 +120,15 @@ plt.xlabel('$t$ $[ms]$')
 plt.ylabel('$y_{c}(t)$ $[mm]$')
 plt.title(r'$|y_{c}(0)|$ $=$ ' + str(abs(round(yc_mm_initial,3))) + ' $mm$, $|vy_{c}(0)|$ $=$ ' + str(abs(round(vyc_ms,3))) + ' $m/s$, $|ay_{c}|$ $=$ ' + str(abs(round(ayc_ms2,3))) + ' $m/s^2$')
 
-plt.savefig('info', format='pdf')
+plt.savefig('impact_parameters', format='pdf')
+
+txt_file = open("impactspeed_sideview_info.txt","w")
+txt_file.write(f"1 pixel = {px_microns} microns\n")
+txt_file.write(f"Recording speed = {fps_hz} Hz\n")
+txt_file.write(f"Image number = {k_start, k_end}\n")
+txt_file.write(f"Y-limits = {y_min, y_max} pixels\n")
+txt_file.write(f"X-limits = {x_min, x_max} pixels\n")
+txt_file.write(f"Radii limits = {radii_min, radii_max} pixels\n")
+txt_file.close()
 
 ################################################################################
