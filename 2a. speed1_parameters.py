@@ -20,33 +20,41 @@ from skimage import color
 
 ################################################################################
 
-hard_disk   = r'/media/devici/Samsung_T5/'
-project     = r'srinath_dhm/impact_over_thin_films/speed1/00100cs0010mum_r4/'
+hard_disk   = r'/media/devici/Samsung_T5'
+project     = r'srinath_dhm/impact_over_thin_films/speed1/00100cs0010mum_r4'
 
-f = hard_disk + project + r'00100cs0010mum_r4'
+################################################################################
+
+f = hard_disk + '/' + project + '/' + r'00100cs0010mum_r4'
 os.chdir(f)
 
-px_microns = 16.155
-fps_hz = 5000.0
+px_microns = np.loadtxt("px_microns.txt")
+fps_hz = int(tuple(open("100cst_10mum_r1_.cih",'r'))[15][19:])
 
-k_start = 14
+k_start = 15
 k_end = 96
 
 y_min = 256
 y_max = 527
 
-x_min = 300
-x_max = 500
+x_min = 310
+x_max = 475
+
+radii_min = 60
+radii_max = 71
 
 images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))
-n = len(glob.glob('*.tif'))
+n = len(glob.glob('*.tif')) - 1
 
+# plt.subplot(1,2,1)
 # plt.imshow(images[k_start],cmap='gray')
+# plt.subplot(1,2,2)
+# plt.imshow(images[k_end],cmap='gray')
 # plt.show()
 
 centers = np.zeros((k_end-k_start+1,2), dtype=int)
 diameters = np.zeros(k_end-k_start+1, dtype=int)
-time_millisec = np.arange(0,((k_end-k_start+1)*1000.0)/fps_hz,1000.0/fps_hz,dtype=float)
+time_millisec = np.arange(0,((k_end-k_start+1)*1000.0)/fps_hz,1000.0/fps_hz, dtype=float)
 
 for k in range(k_start, k_end+1):
     image = images[k]
@@ -56,7 +64,7 @@ for k in range(k_start, k_end+1):
     threshold = threshold_otsu(edge_sobel)
     binary = edge_sobel > threshold
 
-    hough_radii = np.arange(60, 71)
+    hough_radii = np.arange(radii_min, radii_max)
     hough_res = hough_circle(binary, hough_radii)
     ridx, r, c = np.unravel_index(np.argmax(hough_res), hough_res.shape)
 

@@ -106,11 +106,18 @@ ax4.plot([x_right_avg, x_right_avg], [y_start, y_end], linestyle='--', color='re
 
 plt.show(block=False)
 
-length_px = abs(x_right_avg-x_left_avg)
+length_px = int(abs(x_right_avg-x_left_avg))
 length_mm = np.loadtxt("screw_diameter_mm.txt")
 px_microns = round((length_mm/length_px)*(10.0**3),3)
 
 input(f"1 pixel = {px_microns} microns")
+
+txt_file = open("lengthscale_sideview_info.txt","w")
+txt_file.write(f"Threshold = {threshold}\n")
+txt_file.write(f"Y-extents = {y_start, y_end}\n")
+txt_file.write(f"Length = {length_px} pixels\n")
+txt_file.close()
+
 np.savetxt("px_microns.txt", [px_microns], fmt='%0.3f')
 
 ################################################################################
