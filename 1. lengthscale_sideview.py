@@ -10,7 +10,8 @@ from skimage import filters
 
 ################################################################################
 
-hard_disk   = r'/media/devici/Samsung_T5'
+# hard_disk   = r'/media/devici/Samsung_T5'
+hard_disk   = r'E:/'
 project     = r'srinath_dhm/impact_over_thin_films/speed2/00100cs0010mum_r4'
 
 ################################################################################
