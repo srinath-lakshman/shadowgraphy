@@ -10,16 +10,9 @@ from skimage import filters
 
 ################################################################################
 
-# hard_disk   = r'/media/devici/Samsung_T5'
-hard_disk   = r'E:/'
-project     = r'srinath_dhm/impact_over_thin_films/speed2/00100cs0010mum_r4'
+os.chdir(r'F:\color_interferometry\side_view\20200114\experiment')
 
-################################################################################
-
-folder = hard_disk + '/' + project + '/' + r'00100cs0010mum_r4'
-os.chdir(folder)
-
-image_name = r"screw_diameter_mm"
+image_name = r"reference_lengthscale_screw_head_outer_diameter_10_mm"
 
 image = io.imread(image_name + ".tif")
 bit_depth = int(tuple(open(image_name + ".cih",'r'))[26][12:])
@@ -59,7 +52,8 @@ ax4.set_xticks([])
 ax4.set_yticks([])
 ax4.set_title(f"Binary Image, Threshold = {threshold}")
 
-plt.show(block=False)
+# plt.show(block=False)
+plt.show()
 
 x_px, y_px = list(np.shape(image))
 
