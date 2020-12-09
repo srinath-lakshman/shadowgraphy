@@ -20,31 +20,33 @@ from skimage import color
 
 ################################################################################
 
-hard_disk   = r'F:/'
-project     = r'srinath_dhm/impact_over_thin_films/speed1/00350cs0005mum_r1'
+hard_disk   = r'D:/'
+project     = r'color_interferometry/side_view/20201208/'
 
 ################################################################################
 
-file = hard_disk + '/' + project + '/' + r'00350cs0005mum_r1'
+file = hard_disk + '/' + project
+os.chdir(file)
+px_microns = np.loadtxt("px_microns.txt")
+
+file = hard_disk + '/' + project + '/' + r'oil_1cSt_impact_H_4R_on_oil_350cSt_15mum_'
 os.chdir(file)
 
-# px_microns = np.loadtxt("px_microns.txt")
-px_microns = 43
-fps_hz = int(tuple(open("00350cs0005mum_r1.cih",'r'))[15][19:])
-
-k_start, k_end = 368, 425
-y_min, y_max = 95, 174
-x_min, x_max = 100, 165
-radii_min, radii_max = 23, 31
+fps_hz = int(tuple(open("oil_1cSt_impact_H_4R_on_oil_350cSt_15mum_.cih",'r'))[15][19:])
 
 images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))
 n = len(glob.glob('*.tif')) - 1
+k_start, k_end = 21, 66
 
 # plt.subplot(1,2,1)
 # plt.imshow(images[k_start],cmap='gray')
 # plt.subplot(1,2,2)
 # plt.imshow(images[k_end],cmap='gray')
 # plt.show()
+
+y_min, y_max = 675, 999
+x_min, x_max = 130, 380
+radii_min, radii_max = 95, 105
 
 centers = np.zeros((k_end-k_start+1,2), dtype=int)
 diameters = np.zeros(k_end-k_start+1, dtype=int)
@@ -55,14 +57,30 @@ for k in range(k_start, k_end+1):
     image_cropped = image[y_min:y_max+1,x_min:x_max+1]
     image_cropped_filter = filters.gaussian(image_cropped)
     edge_sobel = sobel(image_cropped_filter)
-    threshold = threshold_otsu(edge_sobel)
+    # threshold = threshold_otsu(edge_sobel)
+    threshold = 0.0025
     binary = edge_sobel > threshold
+
+    # print(k, threshold)
+
+    # if k > 32:
+        # plt.subplot(1,2,1)
+        # plt.imshow(edge_sobel,cmap='gray')
+        # plt.subplot(1,2,2)
+        # plt.imshow(binary,cmap='gray')
+        # plt.show()
 
     hough_radii = np.arange(radii_min, radii_max)
     hough_res = hough_circle(binary, hough_radii)
     ridx, r, c = np.unravel_index(np.argmax(hough_res), hough_res.shape)
 
     image_cropped = color.gray2rgb(image_cropped*float(((2**8)-1.0)/((2**12)-1.0))).astype(int)
+    # if k == 39:
+    #     plt.imshow(image_cropped)
+    #     plt.show()
+
+    # print(k)
+
     rr, cc = circle_perimeter(r,c,hough_radii[ridx])
     image_cropped[rr, cc] = (255, 0, 0)
     image_cropped[r,c] = (0, 0, 255)
@@ -121,7 +139,7 @@ plt.xlabel('$t$ $[ms]$')
 plt.ylabel('$y_{c}(t)$ $[mm]$')
 plt.title(r'$|y_{c}(0)|$ $=$ ' + str(abs(round(yc_mm_initial,3))) + ' $mm$, $|vy_{c}(0)|$ $=$ ' + str(abs(round(vyc_ms,3))) + ' $m/s$, $|ay_{c}|$ $=$ ' + str(abs(round(ayc_ms2,3))) + ' $m/s^2$')
 
-plt.savefig('impact_parameters', format='pdf')
+plt.savefig('impact_parameters.pdf', format='pdf')
 
 txt_file = open("impactspeed_sideview_info.txt","w")
 txt_file.write(f"1 pixel = {px_microns} microns\n")
