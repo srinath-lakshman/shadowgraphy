@@ -9,13 +9,13 @@ from skimage.filters import threshold_otsu
 from skimage import filters
 
 import sys
-sys.path.append(r'C:/Users/LakshmanS/Documents/github/functions/')
+sys.path.append(r'F:/github/functions/')
 
 import FUNC_
 
 ################################################################################
 
-directory = r'E:/color_interferometry/side_view/20200520/experiment/'
+directory = r'D:/color_interferometry/side_view/20201208/old'
 image_filename = r'reference_lengthscale'
 
 os.chdir(directory)
@@ -59,7 +59,7 @@ ax4.set_yticks([])
 ax4.set_title(f"Binary Image, Threshold = {threshold}")
 
 plt.show(block=False)
-# plt.show()
+plt.show()
 
 x_px, y_px = list(np.shape(image))
 
