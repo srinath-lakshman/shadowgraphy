@@ -8,14 +8,20 @@ from skimage.filters import sobel
 from skimage.filters import threshold_otsu
 from skimage import filters
 
+import sys
+sys.path.append(r'C:/Users/LakshmanS/Documents/github/functions/')
+
+import FUNC_
+
 ################################################################################
 
-os.chdir(r'F:\color_interferometry\side_view\20200114\experiment')
+directory = r'E:/color_interferometry/side_view/20200520/experiment/'
+image_filename = r'reference_lengthscale'
 
-image_name = r"reference_lengthscale_screw_head_outer_diameter_10_mm"
+os.chdir(directory)
 
-image = io.imread(image_name + ".tif")
-bit_depth = int(tuple(open(image_name + ".cih",'r'))[26][12:])
+image = io.imread(image_filename + '.tif')
+bit_depth = 12
 
 image_conv = image * (((2**16)-1)/((2**bit_depth)-1))
 
@@ -27,7 +33,7 @@ binary = edge_sobel > threshold
 fig_rows = 2
 fig_columns = 2
 
-fig1 = plt.figure(1, figsize=(8,8))
+fig1 = plt.figure(1, figsize=(4,4))
 ax1 = plt.subplot(fig_rows,fig_columns,1)
 ax1.imshow(image_conv, cmap='gray')
 ax1.set_xticks([])
@@ -52,8 +58,8 @@ ax4.set_xticks([])
 ax4.set_yticks([])
 ax4.set_title(f"Binary Image, Threshold = {threshold}")
 
-# plt.show(block=False)
-plt.show()
+plt.show(block=False)
+# plt.show()
 
 x_px, y_px = list(np.shape(image))
 
@@ -102,16 +108,10 @@ ax4.plot([x_right_avg, x_right_avg], [y_start, y_end], linestyle='--', color='re
 plt.show(block=False)
 
 length_px = int(abs(x_right_avg-x_left_avg))
-length_mm = np.loadtxt("screw_diameter_mm.txt")
+length_mm = np.loadtxt("reference_lengthscale_mm.txt")
 px_microns = round((length_mm/length_px)*(10.0**3),3)
 
 input(f"1 pixel = {px_microns} microns")
-
-txt_file = open("lengthscale_sideview_info.txt","w")
-txt_file.write(f"Threshold = {threshold}\n")
-txt_file.write(f"Y-extents = {y_start, y_end}\n")
-txt_file.write(f"Length = {length_px} pixels\n")
-txt_file.close()
 
 np.savetxt("px_microns.txt", [px_microns], fmt='%0.3f')
 

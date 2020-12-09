@@ -20,7 +20,7 @@ from skimage import color
 
 ################################################################################
 
-hard_disk   = r'/media/devici/Samsung_T5'
+hard_disk   = r'F:/'
 project     = r'srinath_dhm/impact_over_thin_films/speed1/00350cs0005mum_r1'
 
 ################################################################################
