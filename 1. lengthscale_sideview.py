@@ -13,6 +13,9 @@ sys.path.append(r'F:/functions/')
 
 import FUNC_
 
+print(sdfsdfs)
+input('')
+
 ################################################################################
 
 directory = r'D:/color_interferometry/side_view/20201208/old'
