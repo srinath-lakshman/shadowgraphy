@@ -13,12 +13,9 @@ sys.path.append(r'F:/functions/')
 
 import FUNC_
 
-print(sdfsdfs)
-input('')
-
 ################################################################################
 
-directory = r'D:/color_interferometry/side_view/20201208/old'
+directory = r'/media/devici/328C773C8C76F9A5/color_interferometry/side_view/20201208/old'
 image_filename = r'reference_lengthscale'
 
 os.chdir(directory)
