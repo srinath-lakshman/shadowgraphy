@@ -16,11 +16,17 @@ from skimage.filters import threshold_otsu
 from skimage.filters import sobel
 from skimage.transform import hough_circle, hough_circle_peaks
 from skimage.draw import circle_perimeter
+from skimage import morphology
 from skimage import color
+from skimage import feature
+from skimage import util
+from scipy.ndimage import distance_transform_edt
+from skimage import measure
+from skimage import segmentation
 
 ################################################################################
 
-hard_disk   = r'D:/'
+hard_disk   = r'/media/devici/328C773C8C76F9A5/'
 project     = r'color_interferometry/side_view/20201208/'
 
 ################################################################################
@@ -53,48 +59,107 @@ diameters = np.zeros(k_end-k_start+1, dtype=int)
 time_millisec = np.arange(0,((k_end-k_start+1)*1000.0)/fps_hz,1000.0/fps_hz, dtype=float)
 
 for k in range(k_start, k_end+1):
+    j=0
+
+    x=np.zeros(k_end-k_start+1)
+    y=np.zeros(k_end-k_start+1)
+
     image = images[k]
     image_cropped = image[y_min:y_max+1,x_min:x_max+1]
-    image_cropped_filter = filters.gaussian(image_cropped)
-    edge_sobel = sobel(image_cropped_filter)
-    # threshold = threshold_otsu(edge_sobel)
-    threshold = 0.0025
+
+    # image_modified = util.img_as_ubyte(image_cropped)
+    image_modified = image_cropped
+
+    #blurring image using median filter
+    image_cropped_filter = filters.median(image_modified)
+
+    #edge detection
+    edge_sobel = filters.sobel(image_cropped_filter)
+    # edge_sobel = feature.canny(image_cropped_filter)
+
+    #closing
+    # closing = morphology.closing(edge_sobel, morphology.disk(2))
+    # morphology.disk(20)
+
+    #thresholding
+    threshold = threshold_otsu(edge_sobel)
     binary = edge_sobel > threshold
 
-    # print(k, threshold)
+    boundary = segmentation.find_boundaries(binary, connectivity=1, mode='inner', background=0)
 
-    # if k > 32:
-        # plt.subplot(1,2,1)
-        # plt.imshow(edge_sobel,cmap='gray')
-        # plt.subplot(1,2,2)
-        # plt.imshow(binary,cmap='gray')
-        # plt.show()
+    #edge skeleton
+    drop_skeleton = morphology.skeletonize(binary)
 
-    hough_radii = np.arange(radii_min, radii_max)
-    hough_res = hough_circle(binary, hough_radii)
-    ridx, r, c = np.unravel_index(np.argmax(hough_res), hough_res.shape)
+    label_image = measure.label(drop_skeleton==1, connectivity=2)
+    image_label_overlay = color.label2rgb(label_image, image=drop_skeleton)
 
-    image_cropped = color.gray2rgb(image_cropped*float(((2**8)-1.0)/((2**12)-1.0))).astype(int)
-    # if k == 39:
-    #     plt.imshow(image_cropped)
-    #     plt.show()
+    print(np.shape(label_image))
 
-    # print(k)
+    props = measure.regionprops(label_image, intensity_image=drop_skeleton)
 
-    rr, cc = circle_perimeter(r,c,hough_radii[ridx])
-    image_cropped[rr, cc] = (255, 0, 0)
-    image_cropped[r,c] = (0, 0, 255)
+    # [x,y] = np.array(props[0:8].centroid
 
-    centers[int(k-k_start)] = (r,c)
-    diameters[int(k-k_start)] = 2.0*hough_radii[ridx]
+    perimeter = np.zeros(label_image.max())
 
-    plt.imshow(image_cropped, cmap='gray')
+    for i in range(label_image.max()):
+        perimeter[i] = props[i].perimeter
+
+    index = np.argmax(perimeter)
+
+    [x[j], y[j]] = props[index].centroid
+    xy_coor = props[index].coords
+    # print(props[index])
+    # input('')
+
+    # contour = measure.find_contour(labels == props[index].label, 0.5)[0]
+
+    # M = moments(image)
+    # centroid = (M[1, 0] / M[0, 0], M[0, 1] / M[0, 0])
+
+    plt.subplot(2,3,1)
+    plt.imshow(image_cropped,cmap='gray')
+    plt.scatter(xy_coor[:,1], xy_coor[:,0])
+    plt.title('Raw image')
+    plt.subplot(2,3,2)
+    # plt.hist(image_cropped)
+    plt.imshow(image_cropped_filter,cmap='gray')
+    # plt.title('Median Filtered image')
+    plt.subplot(2,3,3)
+    plt.imshow(edge_sobel,cmap='gray')
+    # plt.title('Sobel Edge image')
+    plt.subplot(2,3,4)
+    plt.imshow(binary,cmap='gray')
+    # plt.title('Watershed image')
+    plt.subplot(2,3,5)
+    plt.imshow(drop_skeleton,cmap='gray')
+    # plt.plot(peak_idx[:,1],peak_idx[:,0],'r.')
+    # # plt.title('Segmentation image')
+    plt.subplot(2,3,6)
+    plt.imshow(label_image)
+    # plt.title('Segmentation Color image')
+    # plt.subplot(3,3,7)
+    # plt.imshow(color.label2rgb(labels, image=image_modified, kind='avg'), cmap='gray')
+    # # plt.title('Segmentation Geayscale image')
+    plt.tight_layout()
+    plt.show()
+
+    j = j+1
+
+    plt.imshow(edge_sobel, cmap='gray')
     plt.xticks([])
     plt.yticks([])
     plt.savefig('image_cropped' + str(k) +'.png', bbox_inches='tight', format='png')
     plt.close()
 
-diameter_mm = diameters[:]*(px_microns/1000)
+# diameter_mm = diameters[:]*(px_microns/1000)
+diameter_mm = 2
+
+plt.subplot(1,2,1)
+plt.scatter(range(len(x)),x)
+plt.subplot(1,2,2)
+plt.scatter(range(len(y)),y)
+plt.show()
+
 xc_mm = abs(centers[:,1]-centers[0,1])*(px_microns/1000.0)
 yc_mm = abs(centers[:,0]-(y_max-y_min+1))*(px_microns/1000.0)
 

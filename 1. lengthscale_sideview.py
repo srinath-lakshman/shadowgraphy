@@ -9,7 +9,7 @@ from skimage.filters import threshold_otsu
 from skimage import filters
 
 import sys
-sys.path.append(r'F:/functions/')
+sys.path.append(r'/home/devici/github/functions')
 
 import FUNC_
 
