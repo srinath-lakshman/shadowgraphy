@@ -27,23 +27,25 @@ from skimage import segmentation
 ################################################################################
 
 hard_disk   = r'/media/devici/328C773C8C76F9A5/'
-project     = r'color_interferometry/side_view/20201208/'
+project     = r'color_interferometry/side_view/sample'
 
 ################################################################################
 
-file = hard_disk + '/' + project
-os.chdir(file)
-px_microns = np.loadtxt("px_microns.txt")
+# file = hard_disk + '/' + project
+# os.chdir(file)
+# px_microns = np.loadtxt("px_microns.txt")
+px_microns = 10.291
 
-file = hard_disk + '/' + project + '/' + r'oil_1cSt_impact_H_4R_on_oil_350cSt_15mum_'
+# file = hard_disk + '/' + project + '/' + r'oil_1cSt_impact_H_4R_on_oil_350cSt_15mum_'
+file = hard_disk + '/' + project + '/'
 os.chdir(file)
 
-fps_hz = int(tuple(open("oil_1cSt_impact_H_4R_on_oil_350cSt_15mum_.cih",'r'))[15][19:])
+fps_hz = int(tuple(open("sample.cih",'r'))[15][19:])
 
 images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))
 n = len(glob.glob('*.tif')) - 1
 
-k_start, k_end = 16, 66
+k_start, k_end = 18, 112
 
 # plt.subplot(1,2,1)
 # plt.imshow(images[k_start],cmap='gray')
@@ -51,10 +53,8 @@ k_start, k_end = 16, 66
 # plt.imshow(images[k_end],cmap='gray')
 # plt.show()
 
-# y_min, y_max = 675, 999
+y_wall, y_top = 1000, 680
 
-y_wall = 1000
-y_top = 680
 x_center = int(np.shape(images)[2]/2)
 y_min, y_max = y_wall-360, y_wall+100
 x_min, x_max = x_center-150, x_center+150
@@ -65,7 +65,7 @@ volume = np.zeros((k_end-k_start+1), dtype=int)
 time_millisec = np.arange(0,((k_end-k_start+1)*1000.0)/fps_hz,1000.0/fps_hz, dtype=float)
 # time_millisec = time_millisec - time_millisec[-1]
 
-threshold = 670
+threshold = 500
 radius = 35
 
 for k in range(k_start, k_end+1):
