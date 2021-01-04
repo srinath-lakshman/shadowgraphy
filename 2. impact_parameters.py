@@ -26,8 +26,8 @@ from skimage import segmentation
 
 ################################################################################
 
-hard_disk   = r'/media/devici/328C773C8C76F9A5/'
-project     = r'color_interferometry/side_view/sample'
+hard_disk   = r'D:/harddisk_file_contents/'
+project     = r'color_interferometry/side_view/20201212/oil_1cSt_impact_H_4R_on_100cSt_10mum_run1_'
 
 ################################################################################
 

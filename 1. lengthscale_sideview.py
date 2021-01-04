@@ -7,13 +7,31 @@ from PIL import Image
 from skimage.filters import sobel
 from skimage.filters import threshold_otsu
 from skimage import filters
+from FUNC_ import rectangular_fit
 
-import sys
-sys.path.append(r'/home/devici/github/functions')
-
-import FUNC_
+# import sys
+# sys.path.append(r'/home/devici/github/functions')
+#
+# import FUNC_
 
 ################################################################################
+
+foldername              = r'D:\harddisk_file_contents\color_interferometry\side_view\20201212'
+image_filename          = r'reference_lengthscale.tif'
+approximate_center      = [0,0]
+approximate_crop        = 0
+approximate_threshold   = 0
+approximate_radii       = [0,0]
+
+px_microns = rectangular_fit(\
+                                foldername      = foldername, \
+                                image_filename  = image_filename, \
+                                center          = approximate_center, \
+                                crop            = approximate_crop, \
+                                threshold       = approximate_threshold, \
+                                radii           = approximate_radii)
+
+image = io.imread(image_filename)
 
 directory = r'/media/devici/328C773C8C76F9A5/color_interferometry/side_view/20201208/old'
 image_filename = r'reference_lengthscale'
