@@ -26,26 +26,38 @@ from skimage import segmentation
 
 ################################################################################
 
-hard_disk   = r'D:/harddisk_file_contents/'
-project     = r'color_interferometry/side_view/20201212/oil_1cSt_impact_H_4R_on_100cSt_10mum_run1_'
+lengthscale_foldername  = r'D:/harddisk_file_contents/color_interferometry/side_view/20201212'
+lengthscale_file        = r'px_microns.txt'
+
+os.chdir(lengthscale_foldername)
+px_microns = np.loadtxt("px_microns.txt")
+
+################################################################################
+
+foldername = r'D:\harddisk_file_contents\color_interferometry\side_view\20201212\oil_1cSt_impact_H_4R_on_100cSt_10mum_run1_'
+
+os.chdir(foldername)
+
+# hard_disk   = r'D:/harddisk_file_contents/'
+# project     = r'color_interferometry/side_view/20201212/oil_1cSt_impact_H_4R_on_100cSt_10mum_run1_'
 
 ################################################################################
 
 # file = hard_disk + '/' + project
 # os.chdir(file)
 # px_microns = np.loadtxt("px_microns.txt")
-px_microns = 10.291
+# px_microns = 10.291
 
 # file = hard_disk + '/' + project + '/' + r'oil_1cSt_impact_H_4R_on_oil_350cSt_15mum_'
-file = hard_disk + '/' + project + '/'
-os.chdir(file)
+# file = hard_disk + '/' + project + '/'
+# os.chdir(file)
 
-fps_hz = int(tuple(open("sample.cih",'r'))[15][19:])
+fps_hz = int(tuple(open("oil_1cSt_impact_H_4R_on_100cSt_10mum_run1_.cih",'r'))[15][19:])
 
 images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))
 n = len(glob.glob('*.tif')) - 1
 
-k_start, k_end = 18, 112
+k_start, k_end = 18, 117
 
 # plt.subplot(1,2,1)
 # plt.imshow(images[k_start],cmap='gray')
