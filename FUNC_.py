@@ -5,11 +5,15 @@ import cv2
 import sys
 import re
 import math
+
 from matplotlib import pyplot as plt
+import matplotlib.gridspec as gridspec
+
 from PIL import Image
 
 from scipy import stats
 from scipy.ndimage import distance_transform_edt
+from scipy.optimize import curve_fit
 
 import skimage
 from skimage import io
@@ -90,26 +94,43 @@ def lengthscale_info(lengthscale_foldername='', lengthscale_file=''):
 
 ################################################################################
 
-def impact_info(folder='', file='', before_impact = [None,None], after_impact = [None,None], vertical_limits = [None, None], px_microns = None):
+def impact_info(    folder          = '', \
+                    file            = '', \
+                    drop            = '', \
+                    film            = '', \
+                    hf_ideal_mum    = None, \
+                    before_impact   = [None,None], \
+                    after_impact    = [None,None], \
+                    vertical_limits = [None, None], \
+                    free_surface    = None, \
+                    threshold       = None, \
+                    radius          = None, \
+                    px_microns      = None):
 
     os.chdir(folder)
 
     fps_hz = int(tuple(open(file,'r'))[15][19:])
-    images = io.ImageCollection(sorted(glob.glob('*.tif'), key=os.path.getmtime))
+    images = io.ImageCollection(    sorted(glob.glob('*.tif'), \
+                                    key=os.path.getmtime))
     n = len(images) - 1
 
-    # k_start, k_end = 13, 116
-    # k_start, k_end = 282, 510
+    num1 = list(np.arange( before_impact[1] , before_impact[0] - 1 , -1))
+    num2 = list(np.arange(  after_impact[0] ,  after_impact[1] + 1 , +1))
 
-    plt.subplot(2,2,1)
-    plt.imshow(images[before_impact[0]],cmap='gray')
-    plt.subplot(2,2,2)
-    plt.imshow(images[before_impact[1]],cmap='gray')
-    plt.subplot(2,2,3)
-    plt.imshow(images[after_impact[0]],cmap='gray')
-    plt.subplot(2,2,4)
-    plt.imshow(images[after_impact[1]],cmap='gray')
-    plt.show()
+    num = list(np.sort(num1 + num2))
+
+    m = len(num)
+    o = len(num1)
+
+    # plt.subplot(2,2,1)
+    # plt.imshow(images[before_impact[0]],cmap='gray')
+    # plt.subplot(2,2,2)
+    # plt.imshow(images[before_impact[1]],cmap='gray')
+    # plt.subplot(2,2,3)
+    # plt.imshow(images[after_impact[0]],cmap='gray')
+    # plt.subplot(2,2,4)
+    # plt.imshow(images[after_impact[1]],cmap='gray')
+    # plt.show()
 
     y_wall, y_top = vertical_limits[0], vertical_limits[1]
 
@@ -118,21 +139,17 @@ def impact_info(folder='', file='', before_impact = [None,None], after_impact = 
     y_min, y_max = y_wall-360, y_wall+100
     x_min, x_max = x_center-150, x_center+150
 
-    centers = np.zeros((k_end-k_start+1,2), dtype=int)
-    diameters = np.zeros(k_end-k_start+1, dtype=int)
-    volume = np.zeros((k_end-k_start+1), dtype=int)
-    time_millisec = np.arange(0,((k_end-k_start+1)*1000.0)/fps_hz,1000.0/fps_hz, dtype=float)
-    # time_millisec = time_millisec - time_millisec[-1]
+    time_ms = np.arange(m, dtype=float)
+    time_ref = before_impact[1]
 
-    threshold = 500
-    radius = 35
+    centers = np.zeros((m,2), dtype=int)
+    volume = np.zeros(m, dtype=int)
 
-    save_folder = foldername + '/info'
-
+    save_folder = folder + '/info'
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    for k in range(k_start, k_end+1):
+    for i, k in enumerate(num):
 
         print(k)
 
@@ -155,8 +172,9 @@ def impact_info(folder='', file='', before_impact = [None,None], after_impact = 
         xx = axis
         yy = (np.pi/2)*np.trapz(indices[:,1]*np.power(indices[:,0]-axis,2))/vol
 
-        centers[k-k_start] = [axis, yy]
-        volume[k-k_start] = vol
+        time_ms[i] = (k - time_ref)*(1000.0/fps_hz)
+        centers[i] = [xx, yy]
+        volume[i] = vol
 
         # os.chdir(save_folder)
         #
@@ -190,61 +208,190 @@ def impact_info(folder='', file='', before_impact = [None,None], after_impact = 
         # plt.close()
         # # plt.show()
 
+    os.chdir(save_folder)
+
     xc_mm = abs(centers[:,0]-centers[0,0])*(px_microns/1000.0)
     yc_mm = abs(centers[:,1]-(y_wall-y_min+1))*(px_microns/1000.0)
+    radius_mm = np.power((3*volume)/(4*np.pi),1/3)*(px_microns/1000)
 
-    diameters = np.power((6*volume)/np.pi,1/3)
-    diameter_mm = diameters*(px_microns/1000)
-    avg_diameter_mm = np.mean(diameter_mm)
-    diameter_mm_fitted = np.ones(len(time_millisec))* avg_diameter_mm
+    # before impact
+    avg_radius1_mm = np.mean(radius_mm[:o])
+    radius1_mm_fitted = np.ones(len(radius_mm[:o]))* avg_radius1_mm
+    u_pre, xs, xi, xfit_pre = horizontal_trajectory(t=time_ms[:o], r=xc_mm[:o])
+    ys, vs, yi, vi, yfit_pre, t_pre = vertical_trajectory(t=time_ms[:o], r=yc_mm[:o])
 
-    linear_params = np.polyfit(time_millisec, xc_mm, 1)
-    vxc_ms = linear_params[0]
-    xc_mm_initial = linear_params[1]
-    xc_mm_fitted = (time_millisec*vxc_ms) + xc_mm_initial
+    plt.figure(1, figsize=(15, 10))
+    gs = gridspec.GridSpec(6, 5)
 
-    quadratic_params = np.polyfit(time_millisec, yc_mm, 2)
-    ayc_ms2 = quadratic_params[0]*2.0*(1000.0)
-    vyc_ms = quadratic_params[1]
-    yc_mm_initial = quadratic_params[2]
-    yc_mm_fitted = ((1/2.0)*(time_millisec**2.0)*ayc_ms2*(1/1000.0)) + (time_millisec*vyc_ms) + yc_mm_initial
-    vy_impact_ms = (time_millisec[-1]*ayc_ms2*(1/1000.0)) + vyc_ms
-    fall_height_mm = abs(yc_mm_fitted[0] - yc_mm_fitted[-1])
-    fall_time_ms = abs(time_millisec[0] - time_millisec[-1])
-
-    plt.figure(figsize=(15, 10))
-
-    plt.subplot(2,1,1)
-    plt.scatter(time_millisec,diameter_mm/2, marker='.', color='black')
-    plt.plot(time_millisec,diameter_mm_fitted/2, linestyle='--', color='black')
+    plt.subplot(gs[0:2, 1:4])
+    plt.scatter(time_ms[:o],radius_mm[:o], marker='.', color='black')
+    plt.plot(time_ms[:o],radius1_mm_fitted, linestyle='--', color='black')
     plt.xlabel('$t$ $[ms]$')
-    plt.ylabel('$R_{w}(t)$ $[mm]$')
+    plt.ylabel('$R(t)$ $[mm]$')
     plt.ylim(0.5,1.5)
-    plt.title(r'$R_{w}$ $\approx$ ' + str(round(avg_diameter_mm/2,3)) + r' $mm$, $v_{w}$ $\approx$ ' + str(abs(round(vy_impact_ms,3))) + r' $m/s$, $\Delta H_{w}$ $\approx$ ' + str(abs(round(fall_height_mm,3))) + r' $mm$, $\Delta t_{w}$ $\approx$ ' + str(abs(round(fall_time_ms,3))) + ' $ms$')
+    plt.title(r'$<R>$ = ' + str(round(avg_radius1_mm,3)) + r' $mm$, ' \
+               '$v_{i}$ = ' + str(round(vi,3)) + r' $m/s$, '\
+               '$y_{s} - y_{i}$ = ' + str(round(ys - yi,3)) + r' $mm$ ')
 
-    plt.subplot(2,2,3)
-    plt.scatter(time_millisec,xc_mm, marker='.', color='black')
-    plt.plot(time_millisec,xc_mm_fitted, linestyle='--', color='black')
+    plt.subplot(gs[3:6, 0:2])
+    plt.scatter(time_ms[:o],xc_mm[:o], marker='.', color='black')
+    plt.plot(time_ms[:o],xfit_pre, linestyle='--', color='black')
     plt.xlabel('$t$ $[ms]$')
-    plt.ylabel('$x_{c}(t)$ $[mm]$')
-    plt.title(r'$|x_{c}(0)|$ $=$ ' + str(abs(round(xc_mm_initial,3))) + ' $mm$, $|vx_{c}|$ $=$ ' + str(abs(round(vxc_ms,3))) +' $m/s$')
+    plt.ylabel('$x(t)$ $[mm]$')
+    plt.title(r'$x_{s} - x_{i}$ = ' + str(round(xs - xi,3)) + ' $mm$, ' \
+               '$u$ $=$ ' + str(round(u_pre,3)) +' $m/s$ ')
 
-    plt.subplot(2,2,4)
-    plt.scatter(time_millisec,yc_mm, marker='.', color='black')
-    plt.plot(time_millisec,yc_mm_fitted, linestyle='--', color='black')
+    plt.subplot(gs[3:6, 3:5])
+    plt.scatter(time_ms[:o],yc_mm[:o], marker='.', color='black')
+    plt.plot(time_ms[:o],yfit_pre, linestyle='--', color='black')
     plt.xlabel('$t$ $[ms]$')
-    plt.ylabel('$y_{c}(t)$ $[mm]$')
-    plt.title(r'$|y_{c}(0)|$ $=$ ' + str(abs(round(yc_mm_initial,3))) + ' $mm$, $|vy_{c}(0)|$ $=$ ' + str(abs(round(vyc_ms,3))) + ' $m/s$, $|ay_{c}|$ $=$ ' + str(abs(round(ayc_ms2,3))) + ' $m/s^2$')
+    plt.ylabel('$y(t)$ $[mm]$')
+    plt.title(r'$y_{i}$ $=$ ' + str(round(yi,3)) + ' $mm$, ' \
+               '$v_{s}$ $=$ ' + str(round(vs,3)) + ' $m/s$, ' \
+               '$t_{i} - t_{s}$ = ' + str(round(t_pre,3)) + ' $ms$ ')
 
-    plt.savefig('impact_parameters.pdf', format='pdf')
+    plt.savefig('before_impact.pdf', format='pdf')
+
+    #after impact
+    avg_radius2_mm = np.mean(radius_mm[o:])
+    radius2_mm_fitted = np.ones(len(radius_mm[o:]))* avg_radius2_mm
+    u_post, xr, xe, xfit_post = horizontal_trajectory(t=time_ms[o:], r=xc_mm[o:])
+    yr, vr, ye, ve, yfit_post, t_post = vertical_trajectory(t=time_ms[o:], r=yc_mm[o:])
+
+    plt.figure(2, figsize=(15, 10))
+    gs = gridspec.GridSpec(6, 5)
+
+    plt.subplot(gs[0:2, 1:4])
+    plt.scatter(time_ms[o:],radius_mm[o:], marker='.', color='black')
+    plt.plot(time_ms[o:],radius2_mm_fitted, linestyle='--', color='black')
+    plt.xlabel('$t$ $[ms]$')
+    plt.ylabel('$R(t)$ $[mm]$')
+    plt.ylim(0.5,1.5)
+    plt.title(r'$<R>$ = ' + str(round(avg_radius2_mm,3)) + r' $mm$, ' \
+               '$v_{r}$ = ' + str(round(vr,3)) + r' $m/s$, '\
+               '$y_{e} - y_{r}$ = ' + str(round(ye - yr,3)) + r' $mm$ ')
+
+    plt.subplot(gs[3:6, 0:2])
+    plt.scatter(time_ms[o:],xc_mm[o:], marker='.', color='black')
+    plt.plot(time_ms[o:],xfit_post, linestyle='--', color='black')
+    plt.xlabel('$t$ $[ms]$')
+    plt.ylabel('$x(t)$ $[mm]$')
+    plt.title(r'$x_{e} - x_{r}$ = ' + str(round(xe - xr,3)) + ' $mm$, ' \
+               '$u$ $=$ ' + str(round(u_post,3)) +' $m/s$ ')
+
+    plt.subplot(gs[3:6, 3:5])
+    plt.scatter(time_ms[o:],yc_mm[o:], marker='.', color='black')
+    plt.plot(time_ms[o:],yfit_post, linestyle='--', color='black')
+    plt.xlabel('$t$ $[ms]$')
+    plt.ylabel('$y(t)$ $[mm]$')
+    plt.title(r'$y_{r}$ $=$ ' + str(round(yr,3)) + ' $mm$, ' \
+               '$v_{e}$ $=$ ' + str(round(ve,3)) + ' $m/s$, ' \
+               '$t_{e} - t_{r}$ = ' + str(round(t_post,3)) + ' $ms$ ')
+
+    plt.savefig('after_impact.pdf', format='pdf')
 
     txt_file = open("impactspeed_sideview_info.txt","w")
     txt_file.write(f"1 pixel = {px_microns} microns\n")
     txt_file.write(f"Recording speed = {fps_hz} Hz\n")
-    txt_file.write(f"Image number = {k_start, k_end}\n")
-    txt_file.write(f"Y-limits = {y_min, y_max} pixels\n")
-    txt_file.write(f"X-limits = {x_min, x_max} pixels\n")
-    # txt_file.write(f"Radii limits = {radii_min, radii_max} pixels\n")
+    txt_file.write(f"Image number - Before impact = {before_impact[0], before_impact[1]}\n")
+    txt_file.write(f"Image number -  After impact = {after_impact[0], after_impact[1]}\n")
+    txt_file.write(f"Wall, Ceiling = {vertical_limits[0], vertical_limits[1]}\n")
+    txt_file.write(f"free surface = {free_surface}\n")
+    txt_file.write(f"threshold = {threshold}\n")
+    txt_file.write(f"radius = {radius}\n")
     txt_file.close()
 
+    R = (avg_radius1_mm + avg_radius2_mm)/2
+    hf_ideal = hf_ideal_mum
+    hf_real = (free_surface - y_wall)*px_microns
+    g = -9.81
+    rho_d, mu_d, gamma_d = liquid_properties(liquid = drop)
+    rho_f, mu_f, gamma_f = liquid_properties(liquid = film)
+
+    np.savetxt('nd_film_thickness_ideal.txt', [hf_ideal/(1000*R)], fmt='%0.3f')
+    np.savetxt('nd_film_thickness_real.txt',  [hf_real/(1000*R)], fmt='%0.3f')
+    np.savetxt('drop_We_R.txt', [(rho_d*((vi)**2)*R)/(1000*gamma_d)], fmt='%0.3f')
+    np.savetxt('drop_Bo_R.txt', [(rho_d*abs(g)*((R)**2))/(1000*1000*gamma_d)], fmt='%0.3f')
+    np.savetxt('drop_Oh_R.txt', [mu_d/np.power(rho_d*gamma_d*(R/1000),0.5)], fmt='%0.3f')
+    np.savetxt('nd_drop_viscosity.txt', [mu_d/mu_f], fmt='%0.3f')
+    np.savetxt('film_Oh_R.txt', [mu_f/np.power(rho_f*gamma_f*(R/1000),0.5)], fmt='%0.3f')
+    np.savetxt('restitution_coefficient.txt', [vr/(-vi)], fmt='%0.3f')
+
     return None
+
+################################################################################
+
+def horizontal_trajectory(t=[None], r=[None]):
+
+    linear_params = np.polyfit(t, r, 1)
+    u = linear_params[0]
+    rs = linear_params[1] + (linear_params[0]*t[0])
+    re = linear_params[1] + (linear_params[0]*t[-1])
+    rfit = linear_params[1] + (linear_params[0]*t)
+
+    return u, rs, re, rfit
+
+################################################################################
+
+def vertical_trajectory(t=[None], r=[None]):
+
+    a = -9.81
+    r_mod = r - ((a/(2.0*1000.0))*(t**2))
+    linear_params = np.polyfit(t, r_mod, 1)
+    rs = ((a/(2.0*1000.0))*(t[0]**2)) + \
+         (linear_params[0]*(t[0]**1)) + \
+         (linear_params[1]*(t[0]**0))
+    vs = ((a/1000.0)*t[0]) + linear_params[0]
+
+    if max(t)<=0:
+        tt = t[-1]
+    else:
+        tt = -(linear_params[0]*1000.0)/a
+
+    re = ((a/(2.0*1000.0))*(tt**2)) + \
+         (linear_params[0]*(tt**1)) + \
+         (linear_params[1]*(tt**0))
+    ve = ((a/1000.0)*tt) + linear_params[0]
+    rfit = ((a/(2.0*1000.0))*(t**2)) + \
+           (linear_params[0]*(t**1)) + \
+           (linear_params[1]*(t**0))
+    d = tt - t[0]
+
+    return rs, vs, re, ve, rfit, d
+
+################################################################################
+
+def liquid_properties(liquid = ''):
+
+    if liquid == '1 cSt oil':
+        rho = 816
+        eta = 1*(rho/1000)*(1/1000)
+        gamma = 0.017
+    elif liquid == '10 cSt oil':
+        rho = 930
+        eta = 10*(rho/1000)*(1/1000)
+        gamma = 0.020
+    elif liquid == '20 cSt oil':
+        rho = 950
+        eta = 20*(rho/1000)*(1/1000)
+        gamma = 0.021
+    elif liquid == '35 cSt oil':
+        rho = 960
+        eta = 35*(rho/1000)*(1/1000)
+        gamma = 0.021
+    elif liquid == '50 cSt oil':
+        rho = 960
+        eta = 50*(rho/1000)*(1/1000)
+        gamma = 0.021
+    elif liquid == '100 cSt oil':
+        rho = 960
+        eta = 100*(rho/1000)*(1/1000)
+        gamma = 0.021
+    else:
+        rho = None
+        eta = None
+        gamma = None
+
+    return rho, eta, gamma
+
+################################################################################
