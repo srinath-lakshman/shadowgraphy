@@ -12,16 +12,20 @@ import matplotlib.gridspec as gridspec
 from PIL import Image
 
 from scipy import stats
-from scipy.ndimage import distance_transform_edt
-from scipy.ndimage import binary_fill_holes
 from scipy.optimize import curve_fit
+from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_fill_holes
+from scipy.ndimage import distance_transform_edt
 
 import skimage
 from skimage import io
 from skimage import util
 from skimage import color
 from skimage import feature
+
 from skimage import segmentation
+from skimage.segmentation import active_contour
+from skimage.segmentation import morphological_geodesic_active_contour
 
 from skimage import filters
 from skimage.filters import sobel
@@ -95,44 +99,82 @@ def lengthscale_info(lengthscale_foldername='', lengthscale_file=''):
 
 ################################################################################
 
-def impact_info(    folder          = '', \
-                    drop            = '', \
-                    film            = '', \
-                    hf_ideal_mum    = None, \
-                    start_frame     = None, \
-                    end_frame       = None, \
-                    ceiling         = None, \
-                    wall            = None, \
-                    free_surface    = None, \
-                    threshold       = [None, None], \
-                    px_microns      = None):
+def impact_info(\
+                 folder     = '', \
+                 px_microns = None ):
+
+    haha = [str.start() for str in re.finditer('_', folder)]
+    drop = int(folder[haha[-9]+1:haha[-8]-3])                                   # kinematic viscosity of the drop in cSt
+    film = int(folder[haha[-4]+1:haha[-3]-3])                                   # kinematic viscosity of the film in cSt
+    hf_ideal_mum = int(folder[haha[-3]+1:haha[-2]-3])                           # thickness of the film in microns
 
     os.chdir(folder)
-    fps_hz = read_cih()
+    os.chdir('..')
+
+    wall = np.loadtxt('wall.txt')
+
+    os.chdir(folder)
+    os.chdir('input')
+
+    start = int(np.loadtxt('start.txt'))
+    stop = int(np.loadtxt('stop.txt'))
+    ceiling = int(np.loadtxt('ceiling.txt'))
+    interface = int(np.loadtxt('interface.txt'))
+    threshold = np.loadtxt('threshold.txt')
+
+    os.chdir(folder)
+
+    fps_hz, color_bit, width, height = read_cih()
 
     images = io.ImageCollection(sorted(glob.glob('*.tif'), \
                                 key=os.path.getmtime))
 
-    time_ms = np.arange(end_frame-start_frame, dtype=float)
-    centers = np.zeros((end_frame-start_frame,2), dtype=int)
-    volume = np.zeros(end_frame-start_frame, dtype=int)
+    time_ms = np.zeros(stop-start, dtype=float)
+    xc_mm = np.zeros(stop-start, dtype=float)
+    yc_mm = np.zeros(stop-start, dtype=float)
+    radius_mm = np.zeros(stop-start, dtype=float)
 
-    save_folder = folder + '/info1'
+    save_folder = folder + '/output'
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    for i, k in enumerate(range(start_frame, end_frame)):
-    # for i, k in enumerate(range(49, end_frame)):
+    # image_save_folder = folder + '/image_processing'
+    # if not os.path.exists(image_save_folder):
+    #     os.makedirs(image_save_folder)
+
+    phase = 'fall'
+    cyclic_index = None
+
+    for i, k in enumerate(range(start, stop)):
         print(k)
         image = images[k]
-        image_cropped = image[ceiling:wall,:]
-        image_filter = filters.median(image_cropped)
+        image_cropped = image[ceiling:interface,:]
+        image_filter = filters.median(\
+                                       image    = image_cropped, \
+                                       selem    = None, \
+                                       out      = None)
         image_binary1 = image_filter < threshold[0]
         image_binary2 = image_filter > threshold[1]
         image_binary = image_binary1 + image_binary2
-        image_floodfill = binary_fill_holes(image_binary).astype(int)
-
-        boundary = segmentation.find_boundaries(image_floodfill, connectivity=1, mode='outer', background=0)
+        image_floodfill = binary_dilation(\
+                                           input= image_binary, \
+                                           structure = None, \
+                                           iterations=1, \
+                                           mask=None, \
+                                           output=None, \
+                                           border_value=0, \
+                                           origin=0, \
+                                           brute_force=False)
+        image_floodfill = binary_fill_holes(\
+                                             input     = image_floodfill, \
+                                             structure = None, \
+                                             output    = None, \
+                                             origin    = 0)
+        image_closing = morphology.binary_closing(\
+                                                   image = image_floodfill, \
+                                                   selem = morphology.disk(10), \
+                                                   out=None)
+        boundary = segmentation.find_boundaries(image_closing, connectivity=1, mode='inner', background=0)
         indices = np.transpose(np.where(boundary == 1))
         indices[:,[0,1]] = indices[:,[1,0]]
         indices = indices[indices[:, 1].argsort()]
@@ -142,122 +184,198 @@ def impact_info(    folder          = '', \
         xx = axis
         yy = (np.pi/2)*np.trapz(indices[:,1]*np.power(indices[:,0]-axis,2))/vol
 
-        # os.chdir(save_folder)
-        #
+        # os.chdir(image_save_folder)
+
         # plt.subplot(2,3,1)
         # plt.imshow(image_cropped,cmap='gray')
-        # plt.title('Raw image' + str(k))
+        # plt.title('Cropped image ' + str(k))
         # plt.axis('off')
         # plt.subplot(2,3,2)
         # plt.imshow(image_filter,cmap='gray')
-        # plt.title('Median Filter image')
+        # plt.title('Filter image ' + str(k))
         # plt.axis('off')
         # plt.subplot(2,3,3)
         # plt.imshow(image_binary,cmap='gray')
-        # plt.title('Binary image')
+        # plt.title('Binary image ' + str(k))
         # plt.axis('off')
         # plt.subplot(2,3,4)
         # plt.imshow(image_floodfill,cmap='gray')
-        # plt.title('Floodfill image')
+        # plt.title('Floodfill image ' + str(k))
         # plt.axis('off')
         # plt.subplot(2,3,5)
         # plt.imshow(boundary,cmap='gray')
-        # plt.title('Boundary image')
+        # plt.title('Boundary image ' + str(k))
         # plt.axis('off')
         # plt.subplot(2,3,6)
+        # plt.subplot(1,1,1)
         # plt.imshow(image_cropped,cmap='gray')
-        # plt.scatter(indices[:,0], indices[:,1])
+        # plt.scatter(indices[:,0], indices[:,1], marker='.')
         # plt.scatter(xx, yy)
-        # plt.title('Center image')
+        # plt.title('Full image ' + str(k))
         # plt.axis('off')
-        # # plt.savefig('image_cropped' + str(k) +'.png', bbox_inches='tight', format='png')
+        # # plt.savefig('image ' + str(k) +'.png', format='png')
         # # plt.close()
         # plt.show()
 
-        time_ms[i] = i*(1000.0/fps_hz)
-        centers[i] = [xx, yy]
-        volume[i] = vol
+        # frames[i] = k
+        # centers[i] = [xx, yy]
+        # volume[i] = int(vol)
+
+        time_ms[i] = (k-start)*(1000.0/fps_hz)
+        xc_mm[i] = int((width/2)-xx)*(px_microns/1000.0)
+        yc_mm[i] = int((interface-ceiling)-yy)*(px_microns/1000.0)
+        radius_mm[i] = np.power((3*int(vol))/(4*np.pi),1/3)*(px_microns/1000.0)
+
+        if phase == 'fall':
+            if yc_mm[i] < 1:
+                impact_index = i
+                phase = 'lubrication'
+        elif phase == 'lubrication':
+            if yc_mm[i] > 1:
+                bounce_index = i
+                phase = 'rise'
+        elif phase == 'rise':
+            if yc_mm[i] <1:
+                cyclic_index = i
+                phase = 'cyclic'
+        elif phase == 'cyclic':
+            break
 
         # os.chdir(folder)
 
     os.chdir(save_folder)
-
-    xc_mm = abs(centers[:,0]-centers[0,0])*(px_microns/1000.0)
-    yc_mm = abs(centers[:,1]-(wall-ceiling+1))*(px_microns/1000.0)
-    radius_mm = np.power((3*volume)/(4*np.pi),1/3)*(px_microns/1000)
-    radius_correct_mm = radius_mm
-    radius_correct_mm[yc_mm<1] = None
-
-    index = np.argmin(np.abs(np.array(yc_mm)-1))+1
-
-    if len(yc_mm[index:]) == 0:
-        hr = 0
-    else:
-        hr = max(yc_mm[index:])
-
-    # yc_correct_mm = yc_mm
-    # yc_correct_mm[yc_mm<1] = None
-    # time_correct_ms = time_ms
-    # time_correct_ms[yc_mm<1] = None
-
-    u_pre, xs, xi, x_fit_pre = horizontal_trajectory(t=time_ms[:index]-time_ms[index], r=xc_mm[:index])
-    ys, vs, yi, vi, y_fit_pre, d = vertical_trajectory(t=time_ms[:index]-time_ms[index], r=yc_mm[:index])
     g = -9.81
 
-    if hr >= 1:
-        vr = np.power(2*abs(g)*(hr-1)/1000,1/2)
-    else:
-        vr = 0
+    fig1 = plt.figure(1, figsize=(15, 10))
 
-    varepsilon = vr/(-vi)
+    ax1 = plt.subplot(2,1,1)
+    ax2 = plt.subplot(2,2,3)
+    ax3 = plt.subplot(2,2,4)
 
-    plt.figure(1, figsize=(15, 10))
-    gs = gridspec.GridSpec(6, 5)
+    ax1.set_xlabel('$t$ $[ms]$')
+    ax1.set_ylabel('$R(t)$ $[mm]$')
 
-    plt.subplot(gs[0:2, 1:4])
-    plt.scatter(time_ms,radius_mm, marker='.', color='black')
-    plt.xlabel('$t$ $[ms]$')
-    plt.ylabel('$R(t)$ $[mm]$')
-    plt.title(r'$<R>$ = ' + str(round(np.mean(radius_mm),3)) + r' $mm$, ' \
+    ax2.set_xlabel('$t$ $[ms]$')
+    ax2.set_ylabel('$x(t)$ $[mm]$')
+
+    ax3.set_xlabel('$t$ $[ms]$')
+    ax3.set_ylabel('$y(t)$ $[mm]$')
+
+    ax1.scatter(time_ms[:i]-time_ms[impact_index], radius_mm[:i], marker='.', color='black')
+    ax2.scatter(time_ms[:i]-time_ms[impact_index], xc_mm[:i], marker='.', color='black')
+    ax3.scatter(time_ms[:i]-time_ms[impact_index], yc_mm[:i], marker='.', color='black')
+
+    fig1.savefig('total.pdf', format='pdf')
+
+    #Impact
+    time_impact_ms = time_ms[:impact_index]-time_ms[impact_index]
+    xc_impact_mm = xc_mm[:impact_index]
+    yc_impact_mm = yc_mm[:impact_index]
+    radius_impact_mm = radius_mm[:impact_index]
+    u_pre, xs, xi, x_fit_pre = horizontal_trajectory(t=time_impact_ms, r=xc_impact_mm)
+    ys, vs, yim, vim, y_fit_pre, delta_time_pre, vi = vertical_trajectory(t=time_impact_ms, r=yc_impact_mm,a=g)
+    yi = 1
+
+    fig2 = plt.figure(2, figsize=(15, 10))
+
+    ax1 = plt.subplot(2,1,1)
+    ax2 = plt.subplot(2,2,3)
+    ax3 = plt.subplot(2,2,4)
+
+    ax1.set_xlabel('$t$ $[ms]$')
+    ax1.set_ylabel('$R(t)$ $[mm]$')
+
+    ax2.set_xlabel('$t$ $[ms]$')
+    ax2.set_ylabel('$x(t)$ $[mm]$')
+
+    ax3.set_xlabel('$t$ $[ms]$')
+    ax3.set_ylabel('$y(t)$ $[mm]$')
+
+    ax1.scatter(time_impact_ms, radius_impact_mm, marker='.', color='black')
+    ax1.plot(time_impact_ms, np.ones(len(time_impact_ms))*np.mean(radius_impact_mm), linestyle='--', color='red')
+    ax1.set_title(r'$<R>$ = ' + str(round(np.mean(radius_impact_mm),3)) + r' $mm$, ' \
                '$v_{i}$ = ' + str(round(vi,3)) + r' $m/s$, '\
-               '$v_{r}$ = ' + str(round(vr,3)) + r' $m/s$ ')
+               '$t_{i}$ = ' + str(round(delta_time_pre,3)) + r' $ms$ ')
 
-    plt.subplot(gs[3:6, 0:2])
-    plt.scatter(time_ms,xc_mm, marker='.', color='black')
-    plt.xlabel('$t$ $[ms]$')
-    plt.ylabel('$x(t)$ $[mm]$')
-    plt.title(r'$x_{s} - x_{i}$ = ' + str(round(xs - xi,3)) + ' $mm$, ' \
+
+    ax2.scatter(time_impact_ms, xc_impact_mm, marker='.', color='black')
+    ax2.plot(time_impact_ms, x_fit_pre, linestyle='--', color='red')
+    ax2.set_title(r'$x_{s} - x_{i}$ = ' + str(round(xs - xi,3)) + ' $mm$, ' \
                '$u$ $=$ ' + str(round(u_pre,3)) +' $m/s$ ')
 
-    plt.subplot(gs[3:6, 3:5])
-    plt.scatter(time_ms,yc_mm, marker='.', color='black')
-    plt.xlabel('$t$ $[ms]$')
-    plt.ylabel('$y(t)$ $[mm]$')
-    plt.title(r'$y_{s} - y_{i}$ $=$ ' + str(round(ys-yi,3)) + ' $mm$, ' \
-               '$v_{s}$ $=$ ' + str(round(vs,3)) + ' $m/s$, ' \
-               '$h_{r}$ = ' + str(round(hr,3)) + ' $mm$ ')
 
-    # plt.show()
-    plt.savefig('input.pdf', format='pdf')
+    ax3.scatter(time_impact_ms, yc_impact_mm, marker='.', color='black')
+    ax3.plot(time_impact_ms, y_fit_pre, linestyle='--', color='red')
+    ax3.set_title(r'$y_{s} - y_{i}$ $=$ ' + str(round(ys-yi,3)) + ' $mm$, ' \
+               '$v_{s}$ $=$ ' + str(round(vs,3)) + ' $m/s$, ' \
+               '$g$ = ' + str(round(g,3)) + ' $m/s^2$ ')
+
+    fig2.savefig('impact.pdf', format='pdf')
+
+    if cyclic_index != None:
+        #Bounce
+        time_bounce_ms = time_ms[bounce_index:cyclic_index]-time_ms[impact_index]
+        xc_bounce_mm = xc_mm[bounce_index:cyclic_index]
+        yc_bounce_mm = yc_mm[bounce_index:cyclic_index]
+        radius_bounce_mm = radius_mm[bounce_index:cyclic_index]
+        u_post, xr, xe, x_fit_post = horizontal_trajectory(t=time_bounce_ms, r=xc_bounce_mm)
+        yre, vre, ye, ve, y_fit_post, delta_time_post, vr = vertical_trajectory(t=time_bounce_ms, r=yc_bounce_mm,a=g)
+        yr = 1
+
+        fig3 = plt.figure(3, figsize=(15, 10))
+
+        ax1 = plt.subplot(2,1,1)
+        ax2 = plt.subplot(2,2,3)
+        ax3 = plt.subplot(2,2,4)
+
+        ax1.set_xlabel('$t$ $[ms]$')
+        ax1.set_ylabel('$R(t)$ $[mm]$')
+
+        ax2.set_xlabel('$t$ $[ms]$')
+        ax2.set_ylabel('$x(t)$ $[mm]$')
+
+        ax3.set_xlabel('$t$ $[ms]$')
+        ax3.set_ylabel('$y(t)$ $[mm]$')
+
+        ax1.scatter(time_bounce_ms, radius_bounce_mm, marker='.', color='black')
+        ax1.plot(time_bounce_ms, np.ones(len(time_bounce_ms))*np.mean(radius_bounce_mm), linestyle='--', color='red')
+        ax1.set_title(r'$<R>$ = ' + str(round(np.mean(radius_bounce_mm),3)) + r' $mm$, ' \
+                   '$v_{r}$ = ' + str(round(vr,3)) + r' $m/s$, '\
+                   '$t_{r}$ = ' + str(round(delta_time_post,3)) + r' $ms$ ')
+
+
+        ax2.scatter(time_bounce_ms, xc_bounce_mm, marker='.', color='black')
+        ax2.plot(time_bounce_ms, x_fit_post, linestyle='--', color='red')
+        ax2.set_title(r'$x_{e} - x_{r}$ = ' + str(round(xe - xr,3)) + ' $mm$, ' \
+                   '$u$ $=$ ' + str(round(u_post,3)) +' $m/s$ ')
+
+
+        ax3.scatter(time_bounce_ms, yc_bounce_mm, marker='.', color='black')
+        ax3.plot(time_bounce_ms, y_fit_post, linestyle='--', color='red')
+        ax3.set_title(r'$y_{e} - y_{r}$ $=$ ' + str(round(ye-yr,3)) + ' $mm$, ' \
+                   '$v_{e}$ $=$ ' + str(round(ve,3)) + ' $m/s$, ' \
+                   '$g$ = ' + str(round(g,3)) + ' $m/s^2$ ')
+
+        fig3.savefig('bounce.pdf', format='pdf')
+
+    else:
+        vr = 0
 
     txt_file = open("input.txt","w")
 
     txt_file.write(f"folder = {folder}\n")
-    txt_file.write(f"drop = {drop}\n")
-    txt_file.write(f"film = {film}\n")
-    txt_file.write(f"hf_ideal_mum = {hf_ideal_mum}\n")
-    txt_file.write(f"start_frame = {start_frame}\n")
-    txt_file.write(f"end_frame = {end_frame}\n")
+    txt_file.write(f"start = {start}\n")
+    txt_file.write(f"stop = {stop}\n")
     txt_file.write(f"ceiling = {ceiling}\n")
+    txt_file.write(f"interface = {interface}\n")
     txt_file.write(f"wall = {wall}\n")
-    txt_file.write(f"free_surface = {free_surface}\n")
-    txt_file.write(f"threshold = {threshold[0], threshold[1]}\n")
+    txt_file.write(f"threshold = {threshold}\n")
     txt_file.write(f"px_microns = {px_microns}\n")
     txt_file.close()
 
-    R = np.nanmean(radius_correct_mm)
+    R = np.nanmean(radius_mm[yc_mm>1])
     hf_ideal = hf_ideal_mum
-    hf_real = (wall - free_surface)*px_microns
+    hf_real = (wall - interface)*px_microns
     rho_d, mu_d, gamma_d = liquid_properties(liquid = drop)
     rho_f, mu_f, gamma_f = liquid_properties(liquid = film)
 
@@ -306,20 +424,21 @@ def horizontal_trajectory(t=[None], r=[None]):
 
 ################################################################################
 
-def vertical_trajectory(t=[None], r=[None]):
-
-    a = -9.81
+def vertical_trajectory(t=[None], r=[None], a = None):
     r_mod = r - ((a/(2.0*1000.0))*(t**2))
     linear_params = np.polyfit(t, r_mod, 1)
     rs = ((a/(2.0*1000.0))*(t[0]**2)) + \
          (linear_params[0]*(t[0]**1)) + \
          (linear_params[1]*(t[0]**0))
     vs = ((a/1000.0)*t[0]) + linear_params[0]
+    h_max_head_mm = linear_params[1] - (((linear_params[0]**2)/(2*a))*1000)
 
     if max(t)<=0:
         tt = t[-1]
+        v_star = -np.power(2*a*((1-h_max_head_mm)/1000),1/2)
     else:
         tt = -(linear_params[0]*1000.0)/a
+        v_star = +np.power(2*a*((1-h_max_head_mm)/1000),1/2)
 
     re = ((a/(2.0*1000.0))*(tt**2)) + \
          (linear_params[0]*(tt**1)) + \
@@ -330,33 +449,33 @@ def vertical_trajectory(t=[None], r=[None]):
            (linear_params[1]*(t**0))
     d = tt - t[0]
 
-    return rs, vs, re, ve, rfit, d
+    return rs, vs, re, ve, rfit, d, v_star
 
 ################################################################################
 
-def liquid_properties(liquid = ''):
+def liquid_properties(liquid = None):
 
-    if liquid == '1 cSt oil':
+    if liquid == 1:
         rho = 816
         eta = 1*(rho/1000)*(1/1000)
         gamma = 0.017
-    elif liquid == '10 cSt oil':
+    elif liquid == 10:
         rho = 930
         eta = 10*(rho/1000)*(1/1000)
         gamma = 0.020
-    elif liquid == '20 cSt oil':
+    elif liquid == 20:
         rho = 950
         eta = 20*(rho/1000)*(1/1000)
         gamma = 0.021
-    elif liquid == '35 cSt oil':
+    elif liquid == 35:
         rho = 960
         eta = 35*(rho/1000)*(1/1000)
         gamma = 0.021
-    elif liquid == '50 cSt oil':
+    elif liquid == 50:
         rho = 960
         eta = 50*(rho/1000)*(1/1000)
         gamma = 0.021
-    elif liquid == '100 cSt oil':
+    elif liquid == 100:
         rho = 960
         eta = 100*(rho/1000)*(1/1000)
         gamma = 0.021
@@ -371,10 +490,14 @@ def liquid_properties(liquid = ''):
 
 def read_cih():
 
-    data = open(glob.glob('*.cih')[0],'r')
+    data = open(glob.glob('*.cih')[0])
+    data_lines = data.readlines()
 
-    rec = int(tuple(data)[15][19:])
+    rec = int(tuple(data_lines)[15][19:])
+    bit = int(tuple(data_lines)[28][21:])
+    width = int(tuple(data_lines)[23][14:])
+    height = int(tuple(data_lines)[24][15:])
 
-    return rec
+    return rec, bit, width, height
 
 ################################################################################
