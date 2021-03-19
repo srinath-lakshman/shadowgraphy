@@ -3,7 +3,11 @@ from FUNC_ import impact_info
 
 ################################################################################
 
-lengthscale_foldername  = r'E:/harddisk_file_contents/color_interferometry/side_view/20201212'
+dir = r'F:\harddisk_file_contents\color_interferometry\side_view\20201212'
+
+################################################################################
+
+lengthscale_foldername  = dir
 lengthscale_file        = r'px_microns.txt'
 
 px_microns = lengthscale_info(\
@@ -12,10 +16,10 @@ px_microns = lengthscale_info(\
 
 ################################################################################
 
-folder = r'E:\harddisk_file_contents\color_interferometry\side_view\20201212\oil_35cSt_impact_H_4R_on_100cSt_600mum_run3_'
+folder = '\oil_5cSt_impact_H_4R_on_100cSt_600mum_run3_'
 
 impact_info(\
-             folder     = folder,
+             folder     = dir + folder,
              px_microns = px_microns)
 
 ################################################################################

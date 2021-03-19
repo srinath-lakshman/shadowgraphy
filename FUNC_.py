@@ -146,6 +146,7 @@ def impact_info(\
     cyclic_index = None
 
     for i, k in enumerate(range(start, stop)):
+    # for i, k in enumerate(range(start+116-24, stop)):
         print(k)
         image = images[k]
         image_cropped = image[ceiling:interface,:]
@@ -185,7 +186,7 @@ def impact_info(\
         yy = (np.pi/2)*np.trapz(indices[:,1]*np.power(indices[:,0]-axis,2))/vol
 
         # os.chdir(image_save_folder)
-
+        #
         # plt.subplot(2,3,1)
         # plt.imshow(image_cropped,cmap='gray')
         # plt.title('Cropped image ' + str(k))
@@ -207,13 +208,13 @@ def impact_info(\
         # plt.title('Boundary image ' + str(k))
         # plt.axis('off')
         # plt.subplot(2,3,6)
-        # plt.subplot(1,1,1)
+        # # plt.subplot(1,1,1)
         # plt.imshow(image_cropped,cmap='gray')
         # plt.scatter(indices[:,0], indices[:,1], marker='.')
         # plt.scatter(xx, yy)
         # plt.title('Full image ' + str(k))
         # plt.axis('off')
-        # # plt.savefig('image ' + str(k) +'.png', format='png')
+        # plt.savefig('image ' + str(k) +'.png', format='png')
         # # plt.close()
         # plt.show()
 
@@ -241,7 +242,7 @@ def impact_info(\
         elif phase == 'cyclic':
             break
 
-        # os.chdir(folder)
+        os.chdir(folder)
 
     os.chdir(save_folder)
     g = -9.81
@@ -459,6 +460,10 @@ def liquid_properties(liquid = None):
         rho = 816
         eta = 1*(rho/1000)*(1/1000)
         gamma = 0.017
+    elif liquid == 5:
+        rho = 960
+        eta = 5*(rho/1000)*(1/1000)
+        gamma = 0.020
     elif liquid == 10:
         rho = 930
         eta = 10*(rho/1000)*(1/1000)
