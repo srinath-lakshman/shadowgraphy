@@ -111,16 +111,29 @@ def impact_info(\
     os.chdir(folder)
     os.chdir('..')
 
-    wall = np.loadtxt('wall.txt')
+    wall = int(np.loadtxt('wall.txt'))
+    # background = np.loadtxt('background.txt')
+
+    background = io.imread('background.tif')
+
+    threshold = int(np.loadtxt('threshold.txt'))
+    start = int(np.loadtxt('start.txt'))
+    stop = int(np.loadtxt('stop.txt'))
+
+    if np.min(background) == 0:
+        background = background + 1
 
     os.chdir(folder)
     os.chdir('input')
 
-    start = int(np.loadtxt('start.txt'))
-    stop = int(np.loadtxt('stop.txt'))
     ceiling = int(np.loadtxt('ceiling.txt'))
     interface = int(np.loadtxt('interface.txt'))
-    threshold = np.loadtxt('threshold.txt')
+    # threshold = int(np.loadtxt('threshold.txt'))
+
+    # if interface > wall:
+    #     interface = wall
+
+    wall = interface
 
     os.chdir(folder)
 
@@ -133,6 +146,8 @@ def impact_info(\
     xc_mm = np.zeros(stop-start, dtype=float)
     yc_mm = np.zeros(stop-start, dtype=float)
     radius_mm = np.zeros(stop-start, dtype=float)
+    area_mm2 = np.zeros(stop-start, dtype=float)
+    spread_mm = np.zeros(stop-start, dtype=float)
 
     save_folder = folder + '/output'
     if not os.path.exists(save_folder):
@@ -143,31 +158,55 @@ def impact_info(\
     #     os.makedirs(image_save_folder)
 
     phase = 'fall'
+    impact_index = None
+    bounce_index = None
     cyclic_index = None
 
+    # H = 4R
+    # start = 0
+    # end = 150
+    # 0.8
+
+    # H = 11R
+    # start = 100
+    # end = 500
+
+    # background_up = images[0][ceiling:interface,:]
+    # background_up[0:int(0.8*(interface-ceiling)),:] = 0
+    #
+    # background_down = images[150][ceiling:interface,:]
+    # background_down[int(0.8*(interface-ceiling)):(interface-ceiling),:] = 0
+    #
+    # background = background_up + background_down
+    # np.savetxt('background.txt', background, fmt='%d')
+    #
+    # plt.imshow(background_down, cmap='gray')
+    # plt.show()
+
     for i, k in enumerate(range(start, stop)):
-    # for i, k in enumerate(range(start+116-24, stop)):
+    # for i, k in enumerate(range(100, stop)):
         print(k)
         image = images[k]
-        image_cropped = image[ceiling:interface,:]
-        image_filter = filters.median(\
-                                       image    = image_cropped, \
+
+        image = filters.median(\
+                                       image    = image, \
                                        selem    = None, \
                                        out      = None)
-        image_binary1 = image_filter < threshold[0]
-        image_binary2 = image_filter > threshold[1]
-        image_binary = image_binary1 + image_binary2
-        image_floodfill = binary_dilation(\
-                                           input= image_binary, \
-                                           structure = None, \
-                                           iterations=1, \
-                                           mask=None, \
-                                           output=None, \
-                                           border_value=0, \
-                                           origin=0, \
-                                           brute_force=False)
+
+        # # subtract
+        # image_cropped = image[ceiling:interface,:] - background[0:interface-ceiling,:]
+        # image_cropped = np.square(image_cropped)
+
+        # divide
+        image_cropped = np.divide(image[ceiling:interface,:], background[0:interface-ceiling,:])
+
+        image_cropped = (image_cropped - np.min(image_cropped)) * ((np.power(2,8))/(np.max(image_cropped)-np.min(image_cropped)))
+        image_cropped = np.array(image_cropped, dtype = 'int')
+
+        # image_binary = image_cropped > threshold
+        image_binary = image_cropped < threshold
         image_floodfill = binary_fill_holes(\
-                                             input     = image_floodfill, \
+                                             input     = image_binary, \
                                              structure = None, \
                                              output    = None, \
                                              origin    = 0)
@@ -176,45 +215,44 @@ def impact_info(\
                                                    selem = morphology.disk(10), \
                                                    out=None)
         boundary = segmentation.find_boundaries(image_closing, connectivity=1, mode='inner', background=0)
+        # boundary = segmentation.find_boundaries(image_floodfill, connectivity=1, mode='inner', background=0)
         indices = np.transpose(np.where(boundary == 1))
         indices[:,[0,1]] = indices[:,[1,0]]
         indices = indices[indices[:, 1].argsort()]
 
         axis = np.mean(indices[:,0])
         vol = (np.pi/2)*np.trapz(np.power(indices[:,0]-axis,2))
+        surf = (2*np.pi)*np.trapz(np.power(indices[:,0]-axis,1))
         xx = axis
         yy = (np.pi/2)*np.trapz(indices[:,1]*np.power(indices[:,0]-axis,2))/vol
+        maxx = (max(indices[:,0]) - min(indices[:,0]))/2
+        # maxx = 0
 
         # os.chdir(image_save_folder)
         #
-        # plt.subplot(2,3,1)
-        # plt.imshow(image_cropped,cmap='gray')
-        # plt.title('Cropped image ' + str(k))
-        # plt.axis('off')
-        # plt.subplot(2,3,2)
-        # plt.imshow(image_filter,cmap='gray')
-        # plt.title('Filter image ' + str(k))
-        # plt.axis('off')
-        # plt.subplot(2,3,3)
+        # plt.subplot(2,2,1)
         # plt.imshow(image_binary,cmap='gray')
         # plt.title('Binary image ' + str(k))
         # plt.axis('off')
-        # plt.subplot(2,3,4)
+        # plt.subplot(2,2,2)
         # plt.imshow(image_floodfill,cmap='gray')
         # plt.title('Floodfill image ' + str(k))
         # plt.axis('off')
-        # plt.subplot(2,3,5)
-        # plt.imshow(boundary,cmap='gray')
-        # plt.title('Boundary image ' + str(k))
+        # plt.subplot(2,2,3)
+        # plt.imshow(image_closing,cmap='gray')
+        # plt.title('Closing image ' + str(k))
         # plt.axis('off')
-        # plt.subplot(2,3,6)
-        # # plt.subplot(1,1,1)
+        # # plt.subplot(2,2,3)
+        # # plt.imshow(boundary,cmap='gray')
+        # # plt.title('Boundary image ' + str(k))
+        # # plt.axis('off')
+        # plt.subplot(2,2,4)
         # plt.imshow(image_cropped,cmap='gray')
         # plt.scatter(indices[:,0], indices[:,1], marker='.')
         # plt.scatter(xx, yy)
         # plt.title('Full image ' + str(k))
         # plt.axis('off')
-        # plt.savefig('image ' + str(k) +'.png', format='png')
+        # # plt.savefig('image ' + str(k) +'.png', format='png')
         # # plt.close()
         # plt.show()
 
@@ -226,6 +264,8 @@ def impact_info(\
         xc_mm[i] = int((width/2)-xx)*(px_microns/1000.0)
         yc_mm[i] = int((interface-ceiling)-yy)*(px_microns/1000.0)
         radius_mm[i] = np.power((3*int(vol))/(4*np.pi),1/3)*(px_microns/1000.0)
+        area_mm2[i] = surf*np.power((px_microns/1000.0),2)
+        spread_mm[i] = maxx*(px_microns/1000.0)
 
         if phase == 'fall':
             if yc_mm[i] < 1:
@@ -359,9 +399,6 @@ def impact_info(\
 
         fig3.savefig('bounce.pdf', format='pdf')
 
-    else:
-        vr = 0
-
     txt_file = open("input.txt","w")
 
     txt_file.write(f"folder = {folder}\n")
@@ -407,7 +444,15 @@ def impact_info(\
     np.savetxt('Dv.txt', [mu_f/np.power(rho_d*gamma_d*(R/1000),0.5)], fmt='%0.3f')
     np.savetxt('Hr_ideal.txt', [hf_ideal/(1000*R)], fmt='%0.3f')
     np.savetxt('Hr_real.txt', [hf_real/(1000*R)], fmt='%0.3f')
-    np.savetxt('e.txt', [vr/(-vi)], fmt='%0.3f')
+
+    if bounce_index != None:
+        np.savetxt('Tt.txt', [(bounce_index-impact_index)*(1/fps_hz)*np.sqrt((rho_d*(R**3))/(gamma_d))], fmt='%0.3f')
+        np.savetxt('Sr.txt', [max(spread_mm)/R], fmt='%0.3f')
+        np.savetxt('e.txt', [vr/(-vi)], fmt='%0.3f')
+    else:
+        np.savetxt('Tt.txt', [0], fmt='%0.3f')
+        np.savetxt('Sr.txt', [0], fmt='%0.3f')
+        np.savetxt('e.txt', [0], fmt='%0.3f')
 
     return None
 

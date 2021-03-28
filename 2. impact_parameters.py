@@ -3,7 +3,7 @@ from FUNC_ import impact_info
 
 ################################################################################
 
-dir = r'F:\harddisk_file_contents\color_interferometry\side_view\20201212'
+dir = r'F:\harddisk_file_contents\color_interferometry\side_view\substrate_independent\drop_1cSt'
 
 ################################################################################
 
@@ -16,7 +16,7 @@ px_microns = lengthscale_info(\
 
 ################################################################################
 
-folder = '\oil_5cSt_impact_H_4R_on_100cSt_600mum_run3_'
+folder = '\oil_1cSt_impact_H_11R_on_100cSt_10mum_run2_'
 
 impact_info(\
              folder     = dir + folder,
