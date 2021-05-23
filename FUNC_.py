@@ -12,7 +12,9 @@ import matplotlib.gridspec as gridspec
 from PIL import Image
 
 from scipy import stats
+from scipy.ndimage import morphology
 from scipy.optimize import curve_fit
+from scipy.ndimage import median_filter
 from scipy.ndimage import binary_dilation
 from scipy.ndimage import binary_fill_holes
 from scipy.ndimage import distance_transform_edt
@@ -90,50 +92,76 @@ def rectangular_fit(foldername='', image_filename='', vertical_crop=[0,0]):
 
 ################################################################################
 
-def lengthscale_info(lengthscale_foldername='', lengthscale_file=''):
+def info(dir=''):
 
-    os.chdir(lengthscale_foldername)
-    px_microns = np.loadtxt(lengthscale_file)
+    #lengthscale
+    os.chdir(dir + r'\reference_lengthscale')
+    px_microns = np.loadtxt(r'px_microns.txt')
 
-    return px_microns
+    #background
+    os.chdir(dir + r'\background')
+    global_background = io.imread('background.tif')
+
+    if np.min(global_background) == 0:
+        global_background = global_background + 1
+
+    return px_microns, global_background
 
 ################################################################################
 
 def impact_info(\
                  folder     = '', \
-                 px_microns = None ):
+                 px_microns = None, \
+                 global_background = None):
 
     haha = [str.start() for str in re.finditer('_', folder)]
     drop = int(folder[haha[-9]+1:haha[-8]-3])                                   # kinematic viscosity of the drop in cSt
     film = int(folder[haha[-4]+1:haha[-3]-3])                                   # kinematic viscosity of the film in cSt
     hf_ideal_mum = int(folder[haha[-3]+1:haha[-2]-3])                           # thickness of the film in microns
 
+    haha1 = [str.start() for str in re.finditer('H_', folder)]
+    haha2 = [str.start() for str in re.finditer('R_', folder)]
+    needle_height = int(folder[haha1[-1]+2:haha2[0]])
+
     os.chdir(folder)
     os.chdir('..')
 
+    # background = np.loadtxt('background.txt')
+    # background = io.imread('background.tif')
+
+    ceiling = int(np.loadtxt('ceiling.txt'))
+    # interface = int(np.loadtxt('interface.txt'))
+    start = int(np.loadtxt('start.txt'))
+    stop = int(np.loadtxt('stop.txt'))
+    threshold = np.loadtxt('threshold.txt')
     wall = int(np.loadtxt('wall.txt'))
     # background = np.loadtxt('background.txt')
 
-    background = io.imread('background.tif')
-
-    threshold = int(np.loadtxt('threshold.txt'))
-    start = int(np.loadtxt('start.txt'))
-    stop = int(np.loadtxt('stop.txt'))
-
-    if np.min(background) == 0:
-        background = background + 1
+    # background_start = int(np.loadtxt('background_params.txt')[0])
+    # background_end   = int(np.loadtxt('background_params.txt')[1])
+    # background_ratio = np.loadtxt('background_params.txt')[2]
 
     os.chdir(folder)
     os.chdir('input')
 
-    ceiling = int(np.loadtxt('ceiling.txt'))
+    # ceiling = int(np.loadtxt('ceiling.txt'))
     interface = int(np.loadtxt('interface.txt'))
-    # threshold = int(np.loadtxt('threshold.txt'))
+    # start = int(np.loadtxt('start.txt'))
+    # stop = int(np.loadtxt('stop.txt'))
+    # threshold = np.loadtxt('threshold.txt')
+    # wall = int(np.loadtxt('wall.txt'))
+    # background = np.loadtxt('background.txt')
+
+    background_start = int(np.loadtxt('background_params.txt')[0])
+    background_end   = int(np.loadtxt('background_params.txt')[1])
+    background_ratio = np.loadtxt('background_params.txt')[2]
+
+    median_filter_size = 3
 
     # if interface > wall:
     #     interface = wall
 
-    wall = interface
+    # wall = interface
 
     os.chdir(folder)
 
@@ -153,70 +181,66 @@ def impact_info(\
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
-    # image_save_folder = folder + '/image_processing'
-    # if not os.path.exists(image_save_folder):
-    #     os.makedirs(image_save_folder)
+    image_save_folder = folder + '/image_processing'
+    if not os.path.exists(image_save_folder):
+        os.makedirs(image_save_folder)
 
     phase = 'fall'
     impact_index = None
     bounce_index = None
     cyclic_index = None
 
-    # H = 4R
-    # start = 0
-    # end = 150
-    # 0.8
+    if needle_height <= 4:
+        background_up = global_background[ceiling:interface,:]
+        background_up[0:int(background_ratio*(interface-ceiling)),:] = 0
+    else:
+        background_up = images[background_start][ceiling:interface,:]
+        background_up[0:int(background_ratio*(interface-ceiling)),:] = 0
 
-    # H = 11R
-    # start = 100
-    # end = 500
+    background_down = images[background_end][ceiling:interface,:]
+    background_down[int(background_ratio*(interface-ceiling)):(interface-ceiling),:] = 0
 
-    # background_up = images[0][ceiling:interface,:]
-    # background_up[0:int(0.8*(interface-ceiling)),:] = 0
-    #
-    # background_down = images[150][ceiling:interface,:]
-    # background_down[int(0.8*(interface-ceiling)):(interface-ceiling),:] = 0
-    #
-    # background = background_up + background_down
-    # np.savetxt('background.txt', background, fmt='%d')
-    #
-    # plt.imshow(background_down, cmap='gray')
+    background = background_up + background_down
+
+    if np.min(background) == 0:
+        background = background + 1
+
+    # plt.imshow(background, cmap='gray')
     # plt.show()
 
+    os.chdir('output')
+
+    plt.imshow(background, cmap='gray')
+    plt.savefig('background.png', format='png')
+    plt.close()
+
+    os.chdir(folder)
+
     for i, k in enumerate(range(start, stop)):
-    # for i, k in enumerate(range(100, stop)):
-        print(k)
+    # for i, k in enumerate(range(294, stop)):
+        print(k, phase)
         image = images[k]
 
-        image = filters.median(\
-                                       image    = image, \
-                                       selem    = None, \
-                                       out      = None)
+        image_cropped = image[ceiling:interface,:]
+        image_divided  = np.divide(image_cropped, background)
+        image_filtered = median_filter(input = image_divided, \
+                                       size  = median_filter_size)
 
-        # # subtract
-        # image_cropped = image[ceiling:interface,:] - background[0:interface-ceiling,:]
-        # image_cropped = np.square(image_cropped)
+        # image_binary = np.logical_or(image_flitered < threshold, image_flitered > 1 + threshold)
+        image_binary = image_filtered < threshold
 
-        # divide
-        image_cropped = np.divide(image[ceiling:interface,:], background[0:interface-ceiling,:])
+        if any(image_binary[-1,:]):
+            image_binary[-1,:] = binary_fill_holes(input = image_binary[-1,:])
 
-        image_cropped = (image_cropped - np.min(image_cropped)) * ((np.power(2,8))/(np.max(image_cropped)-np.min(image_cropped)))
-        image_cropped = np.array(image_cropped, dtype = 'int')
-
-        # image_binary = image_cropped > threshold
-        image_binary = image_cropped < threshold
         image_floodfill = binary_fill_holes(\
                                              input     = image_binary, \
                                              structure = None, \
                                              output    = None, \
                                              origin    = 0)
-        image_closing = morphology.binary_closing(\
-                                                   image = image_floodfill, \
-                                                   selem = morphology.disk(10), \
-                                                   out=None)
-        boundary = segmentation.find_boundaries(image_closing, connectivity=1, mode='inner', background=0)
-        # boundary = segmentation.find_boundaries(image_floodfill, connectivity=1, mode='inner', background=0)
-        indices = np.transpose(np.where(boundary == 1))
+
+        edges = image_floodfill ^ morphology.binary_dilation(image_floodfill)
+
+        indices = np.transpose(np.where(edges == 1))
         indices[:,[0,1]] = indices[:,[1,0]]
         indices = indices[indices[:, 1].argsort()]
 
@@ -228,33 +252,38 @@ def impact_info(\
         maxx = (max(indices[:,0]) - min(indices[:,0]))/2
         # maxx = 0
 
-        # os.chdir(image_save_folder)
-        #
-        # plt.subplot(2,2,1)
-        # plt.imshow(image_binary,cmap='gray')
-        # plt.title('Binary image ' + str(k))
-        # plt.axis('off')
-        # plt.subplot(2,2,2)
-        # plt.imshow(image_floodfill,cmap='gray')
-        # plt.title('Floodfill image ' + str(k))
-        # plt.axis('off')
-        # plt.subplot(2,2,3)
-        # plt.imshow(image_closing,cmap='gray')
-        # plt.title('Closing image ' + str(k))
-        # plt.axis('off')
-        # # plt.subplot(2,2,3)
-        # # plt.imshow(boundary,cmap='gray')
-        # # plt.title('Boundary image ' + str(k))
-        # # plt.axis('off')
-        # plt.subplot(2,2,4)
-        # plt.imshow(image_cropped,cmap='gray')
-        # plt.scatter(indices[:,0], indices[:,1], marker='.')
-        # plt.scatter(xx, yy)
-        # plt.title('Full image ' + str(k))
-        # plt.axis('off')
-        # # plt.savefig('image ' + str(k) +'.png', format='png')
-        # # plt.close()
-        # plt.show()
+        if i % 10 == 0:
+            os.chdir(image_save_folder)
+
+            plt.subplot(2,2,1)
+            plt.imshow(image_cropped,cmap='gray')
+            plt.title('Cropped image ' + str(k))
+            plt.axis('off')
+            plt.subplot(2,2,2)
+            plt.imshow(image_binary,cmap='gray')
+            plt.title('Binary image ' + str(k))
+            plt.axis('off')
+            plt.subplot(2,2,3)
+            plt.imshow(image_floodfill,cmap='gray')
+            plt.title('Floodfill image ' + str(k))
+            plt.axis('off')
+            # plt.subplot(2,2,3)
+            # plt.imshow(image_closing,cmap='gray')
+            # plt.title('Closing image ' + str(k))
+            # plt.axis('off')
+            # plt.subplot(2,2,3)
+            # plt.imshow(boundary,cmap='gray')
+            # plt.title('Boundary image ' + str(k))
+            # plt.axis('off')
+            plt.subplot(2,2,4)
+            plt.imshow(image_filtered,cmap='gray')
+            plt.scatter(indices[:,0], indices[:,1], marker='.')
+            plt.scatter(xx, yy)
+            plt.title('Full image ' + str(k))
+            plt.axis('off')
+            plt.savefig('image ' + str(k) +'.png', format='png')
+            plt.close()
+            # plt.show()
 
         # frames[i] = k
         # centers[i] = [xx, yy]
@@ -276,13 +305,18 @@ def impact_info(\
                 bounce_index = i
                 phase = 'rise'
         elif phase == 'rise':
-            if yc_mm[i] <1:
+            if yc_mm[i] < 1:
                 cyclic_index = i
                 phase = 'cyclic'
         elif phase == 'cyclic':
             break
 
         os.chdir(folder)
+
+    # print(f'impact index = {impact_index}')
+    # print(f'bounce index = {bounce_index}')
+    # print(f'cyclic index = {cyclic_index}')
+    # input()
 
     os.chdir(save_folder)
     g = -9.81
@@ -309,13 +343,36 @@ def impact_info(\
     fig1.savefig('total.pdf', format='pdf')
 
     #Impact
-    time_impact_ms = time_ms[:impact_index]-time_ms[impact_index]
-    xc_impact_mm = xc_mm[:impact_index]
-    yc_impact_mm = yc_mm[:impact_index]
-    radius_impact_mm = radius_mm[:impact_index]
-    u_pre, xs, xi, x_fit_pre = horizontal_trajectory(t=time_impact_ms, r=xc_impact_mm)
-    ys, vs, yim, vim, y_fit_pre, delta_time_pre, vi = vertical_trajectory(t=time_impact_ms, r=yc_impact_mm,a=g)
+    # time_impact_ms = time_ms[:impact_index]-time_ms[impact_index]
+    # xc_impact_mm = xc_mm[:impact_index]
+    # yc_impact_mm = yc_mm[:impact_index]
+    # radius_impact_mm = radius_mm[:impact_index]
+
     yi = 1
+
+    # if needle_height <= 4:
+    #     y_cutoff = yi*(1+0.05)
+    #     index_cutoff = np.min(np.where(yc_mm < y_cutoff))
+    # else:
+    #     y_cutoff = yc_mm[0]
+    #     index_cutoff = 0
+
+    y_cutoff = yc_mm[0]
+    index_cutoff = 0
+
+    time_impact_ms = time_ms[index_cutoff:impact_index]-time_ms[impact_index]
+    xc_impact_mm = xc_mm[index_cutoff:impact_index]
+    yc_impact_mm = yc_mm[index_cutoff:impact_index]
+    radius_impact_mm = radius_mm[index_cutoff:impact_index]
+
+    if needle_height <= 4:
+        u_pre, xs, xi, x_fit_pre = horizontal_trajectory(t=time_impact_ms, r=xc_impact_mm)
+        ys, vs, yim, vim, y_fit_pre, delta_time_pre, vi, a = vertical_trajectory1(t=time_impact_ms, r=yc_impact_mm)
+        g1 = a
+    else:
+        u_pre, xs, xi, x_fit_pre = horizontal_trajectory(t=time_impact_ms, r=xc_impact_mm)
+        ys, vs, yim, vim, y_fit_pre, delta_time_pre, vi = vertical_trajectory(t=time_impact_ms, r=yc_impact_mm,a=g)
+        g1 = g
 
     fig2 = plt.figure(2, figsize=(15, 10))
 
@@ -338,22 +395,20 @@ def impact_info(\
                '$v_{i}$ = ' + str(round(vi,3)) + r' $m/s$, '\
                '$t_{i}$ = ' + str(round(delta_time_pre,3)) + r' $ms$ ')
 
-
     ax2.scatter(time_impact_ms, xc_impact_mm, marker='.', color='black')
     ax2.plot(time_impact_ms, x_fit_pre, linestyle='--', color='red')
     ax2.set_title(r'$x_{s} - x_{i}$ = ' + str(round(xs - xi,3)) + ' $mm$, ' \
                '$u$ $=$ ' + str(round(u_pre,3)) +' $m/s$ ')
 
-
     ax3.scatter(time_impact_ms, yc_impact_mm, marker='.', color='black')
     ax3.plot(time_impact_ms, y_fit_pre, linestyle='--', color='red')
     ax3.set_title(r'$y_{s} - y_{i}$ $=$ ' + str(round(ys-yi,3)) + ' $mm$, ' \
                '$v_{s}$ $=$ ' + str(round(vs,3)) + ' $m/s$, ' \
-               '$g$ = ' + str(round(g,3)) + ' $m/s^2$ ')
+               '$g$ = ' + str(round(g1,3)) + ' $m/s^2$ ')
 
     fig2.savefig('impact.pdf', format='pdf')
 
-    if cyclic_index != None:
+    if cyclic_index != None and cyclic_index-bounce_index > 10:
         #Bounce
         time_bounce_ms = time_ms[bounce_index:cyclic_index]-time_ms[impact_index]
         xc_bounce_mm = xc_mm[bounce_index:cyclic_index]
@@ -361,6 +416,7 @@ def impact_info(\
         radius_bounce_mm = radius_mm[bounce_index:cyclic_index]
         u_post, xr, xe, x_fit_post = horizontal_trajectory(t=time_bounce_ms, r=xc_bounce_mm)
         yre, vre, ye, ve, y_fit_post, delta_time_post, vr = vertical_trajectory(t=time_bounce_ms, r=yc_bounce_mm,a=g)
+
         yr = 1
 
         fig3 = plt.figure(3, figsize=(15, 10))
@@ -398,6 +454,9 @@ def impact_info(\
                    '$g$ = ' + str(round(g,3)) + ' $m/s^2$ ')
 
         fig3.savefig('bounce.pdf', format='pdf')
+
+    else:
+        vr = 0
 
     txt_file = open("input.txt","w")
 
@@ -445,6 +504,9 @@ def impact_info(\
     np.savetxt('Hr_ideal.txt', [hf_ideal/(1000*R)], fmt='%0.3f')
     np.savetxt('Hr_real.txt', [hf_real/(1000*R)], fmt='%0.3f')
 
+    # np.savetxt('time_ms.txt', time_ms, fmt='%0.3f')
+    # np.savetxt('yc_mm.txt', yc_mm, fmt='%0.3f')
+
     if bounce_index != None:
         np.savetxt('Tt.txt', [(bounce_index-impact_index)*(1/fps_hz)*np.sqrt((rho_d*(R**3))/(gamma_d))], fmt='%0.3f')
         np.savetxt('Sr.txt', [max(spread_mm)/R], fmt='%0.3f')
@@ -467,6 +529,35 @@ def horizontal_trajectory(t=[None], r=[None]):
     rfit = linear_params[1] + (linear_params[0]*t)
 
     return u, rs, re, rfit
+
+################################################################################
+
+def vertical_trajectory1(t=[None], r=[None]):
+    linear_params = np.polyfit(t, r, 2)
+    rs = (linear_params[0]*(t[0]**2)) + \
+         (linear_params[1]*(t[0]**1)) + \
+         (linear_params[2]*(t[0]**0))
+    a = linear_params[0]*2.0*1000.0
+    vs = ((a/1000.0)*t[0]) + linear_params[1]
+    h_max_head_mm = linear_params[2] - (((linear_params[1]**2)/(2*a))*1000)
+
+    if max(t)<=0:
+        tt = t[-1]
+        v_star = -np.power(2*a*((1-h_max_head_mm)/1000),1/2)
+    else:
+        tt = -(linear_params[0]*1000.0)/a
+        v_star = +np.power(2*a*((1-h_max_head_mm)/1000),1/2)
+
+    re = ((a/(2.0*1000.0))*(tt**2)) + \
+         (linear_params[1]*(tt**1)) + \
+         (linear_params[2]*(tt**0))
+    ve = ((a/1000.0)*tt) + linear_params[1]
+    rfit = ((a/(2.0*1000.0))*(t**2)) + \
+           (linear_params[1]*(t**1)) + \
+           (linear_params[2]*(t**0))
+    d = tt - t[0]
+
+    return rs, vs, re, ve, rfit, d, v_star, a
 
 ################################################################################
 
@@ -529,6 +620,14 @@ def liquid_properties(liquid = None):
         rho = 960
         eta = 100*(rho/1000)*(1/1000)
         gamma = 0.021
+    elif liquid == 10000:
+        rho = 971
+        eta = 100*(rho/1000)*(1/1000)
+        gamma = 0.021
+    elif liquid == 'water':
+        rho = 995
+        eta = 1*(rho/1000)*(1/1000)
+        gamma = 0.072
     else:
         rho = None
         eta = None
